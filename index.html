@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarineTalks - 하선일 계산기</title>
+    <style>
+        /* 🎨 디자인 테마 통일 */
+        :root {
+            --main-navy: #0A192F;
+            --point-orange: #FF6B6B;
+            --background-gray: #F5F7FA;
+            --card-white: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background-color: var(--background-gray);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* 스마트폰 앱 형태 외형 */
+        .app-container {
+            width: 100%;
+            max-width: 390px;
+            background-color: var(--card-white);
+            border-radius: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            overflow: hidden;
+            padding-bottom: 20px;
+            min-height: 500px;
+            position: relative;
+        }
+
+        /* ---------------------------------- */
+        /* 📱 1. 메인 화면 (기본 화면) 디자인 */
+        /* ---------------------------------- */
+        #mainPage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        /* 클릭하고 싶게 생기게 만든 대형 D-Day 카드 */
+        .dday-card {
+            background: linear-gradient(135deg, var(--main-navy) 0%, #1e3a67 100%);
+            color: white;
+            width: 85%;
+            padding: 40px 20px;
+            border-radius: 24px;
+            margin-top: 40px;
+            box-shadow: 0 8px 20px rgba(10, 25, 47, 0.3);
+            cursor: pointer; /* 마우스 올리면 손가락 모양 */
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .dday-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 25px rgba(10, 25, 47, 0.4);
+        }
+
+        .main-title {
+            font-size: 18px;
+            opacity: 0.9;
+            letter-spacing: 0.5px;
+        }
+
+        .main-dday {
+            font-size: 54px;
+            font-weight: bold;
+            color: var(--point-orange);
+            margin: 20px 0;
+        }
+
+        .click-hint {
+            font-size: 12px;
+            opacity: 0.6;
+            animation: blink 1.5s infinite; /* 깜빡이는 효과 */
+        }
+
+        @keyframes blink {
+            0% { opacity: 0.4; }
+            50% { opacity: 0.9; }
+            100% { opacity: 0.4; }
+        }
+
+        /* ---------------------------------- */
+        /* ⚙️ 2. 설정 화면 (상세 페이지) 디자인 */
+        /* ---------------------------------- */
+        #setupPage {
+            display: none; /* 처음에는 숨겨둠 */
+            padding: 25px 20px;
+        }
+
+        .setup-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        /* 뒤로가기 버튼 */
+        .btn-back {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--main-navy);
+            margin-right: 15px;
+            padding: 0;
+        }
+
+        .setup-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--main-navy);
+            margin: 0;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--main-navy);
+            margin-bottom: 8px;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #E5E5E5;
+            border-radius: 12px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        .input-group input:focus {
+            border-color: var(--main-navy);
+            outline: none;
+        }
+
+        /* 저장 버튼 */
+        .btn-save {
+            width: 100%;
+            background-color: var(--main-navy);
+            color: white;
+            border: none;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(10, 25, 47, 0.2);
+            margin-top: 20px;
+        }
+
+        .info-msg {
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- 📱 [화면 1] 메인 기본 화면 (D-Day만 덩그러니 보여주는 곳) -->
+        <div id="mainPage">
+            <h2 style="color: var(--main-navy); margin-bottom: 10px;">MarineTalks</h2>
+            <p style="color: #666; font-size: 14px; margin: 0;">오늘도 안전항해 하세요!</p>
+            
+            <!-- 👇 카드를 누르면 설정 창으로 넘어갑니다 -->
+            <div class="dday-card" onclick="openSetupPage()">
+                <div class="main-title">🚢 남은 하선 일수</div>
+                <div class="main-dday" id="mainDdayShow">D - ?</div>
+                <div class="click-hint">💡 터치하여 복무 일정 설정/수정하기</div>
+            </div>
+            
+            <p id="exactDateText" style="margin-top: 30px; font-size: 14px; color: #4A5568; font-weight: 500;"></p>
+        </div>
+
+        <!-- ⚙️ [화면 2] 설정 상세 화면 (평소엔 숨겨져 있다가 터치하면 나타남) -->
+        <div id="setupPage">
+            <div class="setup-header">
+                <button class="btn-back" onclick="closeSetupPage()">←</button>
+                <h3 class="setup-title">승선 정보 설정</h3>
+            </div>
+
+            <div class="input-group">
+                <label for="joinDate">배에 탄 날짜 (승선일)</label>
+                <input type="date" id="joinDate">
+            </div>
+
+            <div class="input-group">
+                <label for="serviceMonths">총 승선 기간 (개월)</label>
+                <select id="serviceMonths">
+                    <option value="6">6개월 (일반 상선 표준)</option>
+                    <option value="12">12개월</option>
+                    <option value="18">18개월 (승선근무예비역)</option>
+                    <option value="36">36개월 (의무 승선 근무)</option>
+                </select>
+            </div>
+
+            <button class="btn-save" onclick="saveAndApply()">정보 저장 및 적용하기</button>
+            <div class="info-msg">MarineTalks Project © 2026</div>
+        </div>
+
+    </div>
+
+    <!-- 🧠 화면 전환 및 계산 로직 -->
+    <script>
+        // 오늘 날짜 기본 세팅
+        document.getElementById('joinDate').valueAsDate = new Date();
+        
+        // 브라우저가 처음 켜졌을 때 기본 계산 한번 실행
+        calculateAndRefresh();
+
+        // 1. 카드를 눌렀을 때: 메인 숨기고 ➡️ 설정창 띄우기
+        function openSetupPage() {
+            document.getElementById('mainPage').style.display = 'none';
+            document.getElementById('setupPage').style.display = 'block';
+        }
+
+        // 2. 뒤로가기 눌렀을 때: 설정창 숨기고 ➡️ 메인 띄우기
+        function closeSetupPage() {
+            document.getElementById('setupPage').style.display = 'none';
+            document.getElementById('mainPage').style.display = 'flex';
+        }
+
+        // 3. 저장 버튼 눌렀을 때 실행되는 함수
+        function saveAndApply() {
+            calculateAndRefresh(); // 계산 갱신하고
+            closeSetupPage();      // 메인 화면으로 돌아가기
+        }
+
+        // 🧮 핵심 D-Day 계산 엔진
+        function calculateAndRefresh() {
+            const joinDateInput = document.getElementById('joinDate').value;
+            const serviceMonths = parseInt(document.getElementById('serviceMonths').value);
+
+            if (!joinDateInput) return;
+
+            const joinDate = new Date(joinDateInput);
+            const today = new Date();
+
+            // 하선 예정일 계산 (승선일 + 개월수)
+            const dischargeDate = new Date(joinDate);
+            dischargeDate.setMonth(dischargeDate.getMonth() + serviceMonths);
+
+            // 남은 일수 계산
+            const timeDiff = dischargeDate.getTime() - today.getTime();
+            const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+            // 메인 화면 큰 글씨 전광판에 반영
+            const mainDdayShow = document.getElementById('mainDdayShow');
+            if (daysLeft > 0) {
+                mainDdayShow.innerText = "D - " + daysLeft;
+            } else if (daysLeft === 0) {
+                mainDdayShow.innerText = "D - DAY 🎉";
+            } else {
+                mainDdayShow.innerText = "하선 완료 ✨";
+            }
+
+            // 하단에 텍스트로 하선 예정일 뿌려주기
+            const year = dischargeDate.getFullYear();
+            const month = dischargeDate.getMonth() + 1;
+            const date = dischargeDate.getDate();
+            document.getElementById('exactDateText').innerText = `예정 하선일: ${year}년 ${month}월 ${date}일`;
+        }
+    </script>
+</body>
+</html>

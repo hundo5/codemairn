@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>마린톡 항로 기록기</title>
+    <!-- Leaflet 지도 라이브러리 및 스타일 포함 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --primary-color: #005A64;
+            --bg-color: #f4f6f9;
+            --card-bg: #ffffff;
+            --accent-red: #d9534f;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-color); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* 화면 전환 스타일 */
+        .screen { display: none; width: 100%; height: 100%; flex-direction: column; }
+        .screen.active { display: flex; }
+
+        /* 1단계 화면: 심플 요약 툴 */
+        #main-summary { justify-content: center; align-items: center; padding: 20px; text-align: center; background: linear-gradient(135deg, #003b42 0%, #005A64 100%); color: white; }
+        .summary-card { background: rgba(255, 255, 255, 0.1); padding: 30px 20px; border-radius: 20px; width: 100%; max-width: 350px; backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .summary-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .coords { font-size: 16px; color: #b2dbdf; margin: 15px 0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; font-family: monospace; }
+        .btn-next { background-color: #ffffff; color: var(--primary-color); border: none; padding: 15px 30px; border-radius: 30px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 20px; transition: transform 0.2s; }
+        .btn-next:active { transform: scale(0.97); }
+
+        /* 2단계 화면: 구 모형 지도 공간 */
+        #map-container { position: relative; flex: 1; }
+        #map { width: 100%; height: 100%; }
+        
+        /* 하단 오버레이 카드 (KakaoTalk_20260701_224513013.jpg 스타일 계승) */
+        .map-overlay { position: absolute; bottom: 20px; left: 5%; width: 90%; background: var(--card-bg); border-radius: 20px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); z-index: 1000; }
+        .status-grid { display: flex; justify-content: space-between; text-align: center; margin-bottom: 15px; }
+        .status-item span { display: block; font-size: 12px; color: #888; margin-bottom: 5px; }
+        .status-item strong { font-size: 18px; color: #333; }
+        .btn-back { background-color: var(--primary-color); color: white; border: none; padding: 12px; border-radius: 12px; width: 100%; font-size: 15px; font-weight: bold; }
+
+        /* 커스텀 마커 CSS */
+        .moving-marker { background: #007bff; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        .stopped-marker { background: var(--accent-red); border: 2px solid white; border-radius: 50%; box-shadow: 0 0 15px rgba(217,83,79,0.7); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <!-- 1단계: 메인 요약 툴 화면 -->
+    <div id="screen-summary" class="screen active">
+        <div id="main-summary">
+            <div class="summary-card">
+                <div class="summary-title">⚓ 마린톡 위치 모니터</div>
+                <p style="font-size: 14px; color: #dfdfdf;">현재 내 장치의 실시간 위치 정보를 수신합니다.</p>
+                <div class="coords" id="sum-coords">위치 확인 중...</div>
+                <button class="btn-next" onclick="switchScreen('screen-map')">지도로 항로 보기 🗺️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2단계: 지도 화면 -->
+    <div id="screen-map" class="screen">
+        <div id="map-container">
+            <div id="map"></div>
+            <!-- 하단 정보창 -->
+            <div class="map-overlay">
+                <div class="status-grid">
+                    <div class="status-item"><span>상태</span><strong id="map-status">이동 중</strong></div>
+                    <div class="status-item"><span>현재 위도</span><strong id="map-lat">--</strong></div>
+                    <div class="status-item"><span>현재 경도</span><strong id="map-lng">--</strong></div>
+                </div>
+                <button class="btn-back" onclick="switchScreen('screen-summary')">돌아가기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let currentMarker;
+        let pathLine;
+        let lastLat = null;
+        let lastLng = null;
+        let stayStartTime = null;
+        const STAY_THRESHOLD = 10 * 60 * 1000; // 10분 (테스트용으로 줄여서 확인 가능)
+
+        // 화면 전환 함수
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            
+            // 지도 화면으로 진입할 때 맵 로드 엔진이 깨지지 않도록 강제 새로고침 리사이즈
+            if (screenId === 'screen-map' && map) {
+                setTimeout(() => map.invalidateSize(), 100);
+            }
+        }
+
+        // Leaflet 지도 초기화 (초기 NaN 예외 완벽 방어)
+        function initMap(lat, lng) {
+            // 위도 경도가 비정상적일 경우 대한민국 해역 기본값으로 방어 조치
+            if(isNaN(lat) || isNaN(lng) || lat === null) {
+                lat = 36.33267; 
+                lng = 127.43478;
+            }
+            
+            map = L.map('map', {
+                center: [lat, lng],
+                zoom: 12,
+                zoomControl: false // 모바일 가독성을 위해 기본 줌버튼 제거
+            });
+
+            // 위성 느낌과 구 모형 질감을 살릴 수 있는 오픈 기본 지도 레이어 탑재
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+
+            // 실시간 항로 그리기 선(Line) 초기화
+            pathLine = L.polyline([], {color: '#005A64', weight: 4}).addTo(map);
+        }
+
+        // 실시간 위치 추적 및 정체 판단 로직
+        function updateLocation(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+
+            // 1. NaN 예외 전면 차단 (빨간 화면 버그 방지책)
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            // 1단계 요약 텍스트 갱신
+            document.getElementById('sum-coords').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            
+            // 2단계 지도 텍스트 갱신
+            document.getElementById('map-lat').innerText = lat.toFixed(5);
+            document.getElementById('map-lng').innerText = lng.toFixed(5);
+
+            // 지도가 없으면 최초 1회 생성
+            if (!map) {
+                initMap(lat, lng);
+            }
+
+            const currentPos = [lat, lng];
+            
+            // 10분 이상 정체 여부 판단 알고리즘
+            if (lastLat !== null && lastLng !== null) {
+                // 이전 좌표와 소수점 4자리까지 완전히 일치하는지 비교 (대략 수 미터 이내 정체)
+                const isSameLocation = (lastLat.toFixed(4) === lat.toFixed(4) && lastLng.toFixed(4) === lng.toFixed(4));
+
+                if (isSameLocation) {
+                    if (!stayStartTime) stayStartTime = new Date();
+                    
+                    const duration = new Date() - stayStartTime;
+                    if (duration >= STAY_THRESHOLD) {
+                        // 10분 경과 시: 마커 정체 상태(빨간색)로 변경
+                        document.getElementById('map-status').innerText = "10분 정체 중";
+                        document.getElementById('map-status').style.color = "var(--accent-red)";
+                        updateMarker(currentPos, 'stopped-marker');
+                    }
+                } else {
+                    // 위치가 이동했다면 타이머 및 상태 리셋
+                    stayStartTime = null;
+                    document.getElementById('map-status').innerText = "이동 중";
+                    document.getElementById('map-status').style.color = "#333";
+                    updateMarker(currentPos, 'moving-marker');
+                    pathLine.addLatLng(currentPos); // 항로선 추가
+                }
+            } else {
+                // 최초 진입 시 마커 생성
+                updateMarker(currentPos, 'moving-marker');
+                pathLine.addLatLng(currentPos);
+            }
+
+            lastLat = lat;
+            lastLng = lng;
+            map.setView(currentPos); // 화면 중심 이동
+        }
+
+        // 마커 스타일 및 위치 갱신 함수
+        function updateMarker(pos, className) {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+            
+            // HTML 커스텀 마커 팩토리 활용
+            const customIcon = L.divIcon({
+                className: className,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+
+            currentMarker = L.marker(pos, {icon: customIcon}).addTo(map);
+        }
+
+        // 위치 탐색 중 에러 처리
+        function handleError(err) {
+            console.warn(`ERROR(${err.code}): ${err.message}`);
+            document.getElementById('sum-coords').innerText = "GPS 신호를 기다리는 중...";
+        }
+
+        // HTML5 Geolocation API 구동 (highAccuracy 설정으로 GPS 정밀 수신)
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(updateLocation, handleError, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        } else {
+            alert("이 브라우저는 GPS 위치 추적을 지원하지 않습니다.");
+        }
+    </script>
+</body>
+</html>
